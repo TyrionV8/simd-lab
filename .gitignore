@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+test-results/
+.env
+.env.*
+*.log
+.cache/
+.coverage
+node_modules/
+circuito
+circuito.c

@@ -1,0 +1,11 @@
+SIMD Lab
+Copyright 2026 TyrionV8
+
+Educational numerical layouts and accumulation contracts are based on the
+Colibri project (https://github.com/JustVugg/colibri), licensed under the
+Apache License, Version 2.0. Credit to the Colibri contributors.
+
+This is a separate educational application. It exposes individual operations,
+generates standalone C circuits, and adds independent numerical references,
+visual inspection, test cases, and native measurement. It is not the Colibri
+engine and is not affiliated with its maintainers.

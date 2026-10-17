@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101516">
+  <title>SIMD Lab · Oficina de instruções</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="SIMD Lab"><span class="brand-mark" aria-hidden="true">▥</span><b>SIMD<span>lab</span></b></a>
+    <select id="preset" aria-label="Exemplo de implementação"></select>
+    <span id="machine" class="machine"></span>
+    <div class="file-actions"><button id="undo" aria-label="Desfazer" title="Desfazer · Ctrl+Z">↶</button><button id="redo" aria-label="Refazer" title="Refazer · Ctrl+Shift+Z">↷</button><button id="new">＋ Novo</button><button id="save">Salvar</button><button id="import">Abrir</button><input id="import-file" type="file" accept=".json,application/json" hidden></div>
+  </header>
+  <nav class="main-nav" aria-label="Áreas do laboratório">
+    <div class="view-tabs"><button data-view="circuit" class="active">Circuito</button><button data-view="inputs">Entradas</button><button data-view="code">Código C</button><button data-view="execution">Xeon real</button><button data-view="validation">Validação</button><button data-view="clock">Clock didático</button><button data-view="guide">Guia</button></div>
+    <span id="save-status" class="muted">Salvo somente neste navegador</span>
+  </nav>
+  <section class="comparison-bar" aria-label="Comparação entre implementação e gabarito" aria-live="polite">
+    <div class="answer mine"><span>MEU CIRCUITO · SIMULAÇÃO</span><strong id="actual">—</strong></div>
+    <div class="answer oracle"><span>GABARITO INDEPENDENTE</span><strong id="expected">—</strong><small id="oracle-label"></small></div>
+    <div class="answer native"><span>C EXECUTADO NO XEON</span><strong id="native-answer">Ainda não executado</strong><small id="native-match"></small></div>
+    <div class="verdict"><strong id="verdict">Preparando</strong><div id="error-metrics"></div></div>
+  </section>
+  <div id="notification" role="alert" hidden></div>
+  <main>
+    <section id="circuit-view" class="view circuit-view">
+      <div class="diagram-toolbar">
+        <button id="toggle-palette">＋ Blocos</button><button id="arrange">Organizar</button><button id="fit">Enquadrar</button>
+        <label class="check"><input id="show-node-data" type="checkbox" checked> Dados nos blocos</label>
+        <select id="representation" aria-label="Representação dos dados"><option value="number">Valores decimais</option><option value="bits">Bits</option><option value="hex">Bytes / hexadecimal</option></select>
+        <select id="register-bits" aria-label="Agrupamento vetorial"><option value="128">128 bits</option><option value="256">256 bits</option></select>
+        <div class="play-controls"><button id="restart" aria-label="Voltar ao início">↤</button><button id="previous" aria-label="Etapa anterior">‹</button><button id="play" aria-label="Reproduzir etapas">▶</button><button id="next" aria-label="Próxima etapa">›</button><button id="reveal">Ver tudo</button><select id="play-speed" aria-label="Velocidade visual"><option value="700">Lento</option><option value="350" selected>Normal</option><option value="150">Rápido</option></select><span id="step-label">Todas as etapas</span></div>
+      </div>
+      <div class="diagram-layout">
+        <aside id="palette" class="palette" hidden><header><h2>Operações</h2><button id="close-palette" aria-label="Fechar paleta">×</button></header><input id="search" type="search" placeholder="Buscar operação ou instrução" aria-label="Buscar blocos"><div id="palette-list"></div></aside>
+        <section id="canvas-root" class="bench" aria-label="Editor de circuito">
+          <div class="bench-hint"><span id="connection-hint">Roda: zoom · arraste o fundo para navegar · saída ● → entrada ○</span><button id="cancel-link" hidden>Cancelar ligação</button></div>
+          <div id="viewport" class="viewport"><div id="world-wrap"><div id="world"><svg id="wires" aria-label="Fluxo dos dados"></svg><div id="nodes"></div></div></div><div id="empty" hidden><h2>Monte seu caminho.</h2><p>Adicione as entradas, conecte as operações e termine em uma saída.</p><button id="empty-add">＋ Escolher blocos</button></div></div>
+          <footer class="bench-footer"><span id="graph-size"></span><span id="virtual-cycle"></span><div><button id="zoom-out" aria-label="Diminuir zoom">−</button><button id="zoom-reset" title="Zoom de 100%"><span id="zoom-label">80%</span></button><button id="zoom-in" aria-label="Aumentar zoom">＋</button><button id="focus-selected">Focar seleção</button></div></footer>
+        </section>
+        <div id="inspector-resizer" class="resizer" role="separator" aria-label="Largura do inspetor" aria-orientation="vertical"></div>
+        <aside id="inspector" class="inspector"><header class="inspector-top"><div><button data-detail="data" class="active">Valores</button><button data-detail="operation">Operação e C</button></div><button id="expand-inspector" title="Expandir ou recolher dados">↔</button><button id="close-inspector" aria-label="Fechar inspetor">×</button></header><div id="inspector-content"></div></aside>
+      </div>
+    </section>
+    <section id="inputs-view" class="view page-view" hidden>
+      <div class="section-heading"><div><span class="eyebrow">DADOS DE ENTRADA</span><h1>Edite os números, veja o efeito.</h1><p>Todos os 64 pesos e as 64 ativações ficam visíveis. Os valores são arredondados para FP32 ao aplicar.</p></div><div><span id="input-dirty"></span><button id="apply-inputs" class="primary">Aplicar entradas</button></div></div>
+      <div class="input-actions"><label>Gerador<select id="input-pattern"><option value="original">Padrão inicial</option><option value="fractional">Frações</option><option value="random">Aleatório reproduzível</option><option value="extreme">Valores extremos</option><option value="zero">Zeros</option><option value="ones">Ativações iguais a 1</option></select></label><label>Semente<input id="input-seed" type="number" value="2696" min="0" max="4294967295"></label><button id="generate-inputs">Gerar dados</button><label>Escala dos pesos<input id="weight-scale" type="number" step="any" value="1"></label></div>
+      <div class="input-editors"><section class="panel"><header><div><h2>Pesos</h2><span>64 inteiros com sinal de 4 bits · de −8 a 7</span></div><button data-paste="weights">Colar lista / CSV</button></header><div id="weights-grid" class="input-grid"></div><div id="weights-errors" class="field-error" role="status"></div></section><section class="panel"><header><div><h2>Ativações</h2><span>64 números de 32 bits · floating point (FP32)</span></div><button data-paste="activations">Colar lista / CSV</button></header><div id="activations-grid" class="input-grid"></div><div id="activations-errors" class="field-error" role="status"></div></section></div>
+      <div id="paste-panel" class="panel paste-panel" hidden><header><h2 id="paste-title">Colar valores</h2><button id="close-paste">Fechar</button></header><label class="check"><input id="decimal-comma" type="checkbox"> Vírgula decimal (separe os valores com espaço ou ponto e vírgula)</label><textarea id="paste-values" rows="5" placeholder="Cole uma lista, CSV ou um array JSON com 64 números"></textarea><div><span id="paste-count"></span><button id="apply-paste" class="primary">Preencher a grade</button></div></div>
+    </section>
+    <section id="code-view" class="view page-view" hidden><div class="section-heading"><div><span class="eyebrow">CÓDIGO DA SUA IMPLEMENTAÇÃO</span><h1>Das ligações para funções C.</h1><p id="code-features"></p></div><div><button id="copy-code">Copiar programa</button><button id="download-code" class="primary">Baixar circuito.c</button></div></div><div class="code-layout"><aside class="panel code-list"><h2>Trechos do circuito</h2><button data-code="all">Programa completo</button><button data-code="kernel">Função circuit</button><div id="code-block-list"></div></aside><div><h2 id="code-title">Programa completo</h2><pre id="code" class="code"></pre></div></div></section>
+    <section id="execution-view" class="view page-view" hidden>
+      <div class="section-heading"><div><span class="eyebrow">EXECUÇÃO NATIVA</span><h1>Meça dentro do processo C.</h1><p id="cpu-details"></p></div><button id="run-native" class="primary">▶ Compilar, validar e medir</button></div>
+      <div id="hardware-status" class="hardware-status"></div>
+      <div class="run-config panel"><label>Repetições por amostra<input id="run-repetitions" type="number" min="100" max="100000" value="10000"></label><label>Amostras<input id="run-samples" type="number" min="3" max="11" value="7"></label><label>Aquecimento<input id="run-warmup" type="number" min="0" max="10000" value="500"></label><label>Afinidade de CPU<select id="run-core"></select></label><label class="check"><input id="run-suite" type="checkbox" checked> Conferir também os casos de teste</label></div>
+      <div id="job-progress" class="job-progress" hidden><div><strong id="job-message"></strong><button id="cancel-job">Cancelar trabalho</button></div><progress id="job-percent" max="100" value="0"></progress></div>
+      <div id="native-results"><p class="empty-panel">Execute para obter tempos, contadores, assembly e a conferência de cada valor.</p></div>
+      <details class="panel explanation"><summary>Como interpretar as medições</summary><p>O aquecimento e as amostras rodam dentro do C. Compilar e abrir o processo ficam fora do tempo por execução. Os dados são reutilizados e tendem a estar em cache. O programa materializa as etapas em arrays; a medição inclui esse trabalho e não prevê tokens por segundo do Colibri.</p><p><strong>TSC</strong> significa Time Stamp Counter: contador de referência. Seus ticks não são os ciclos efetivos do núcleo. O contador de ciclos da <strong>PMU</strong>, Performance Monitoring Unit, só aparece se o Linux permitir. O aplicativo não altera permissões do sistema.</p><p>Afinidade mantém o processo em uma CPU lógica. O sistema ainda pode interrompê-lo. Veja a variação entre amostras; o custo do loop vazio é medido separadamente, sem subtração automática.</p></details>
+      <details id="assembly-panel" class="panel" hidden><summary>Assembly real do executável</summary><label>Função<select id="assembly-function"></select></label><pre id="assembly" class="code"></pre></details>
+      <section id="benchmark-history" class="panel" hidden><h2>Execuções desta sessão</h2><div id="history-table"></div></section>
+    </section>
+    <section id="validation-view" class="view page-view" hidden>
+      <div class="section-heading"><div><span class="eyebrow">GABARITO INDEPENDENTE</span><h1>Seu circuito está fazendo a conta certa?</h1><p>O gabarito usa as entradas originais e a regra escolhida abaixo. Ele não segue suas ligações.</p></div><button id="run-validation" class="primary">Validar vários casos</button></div>
+      <div class="validation-config panel"><label>Regra do gabarito<select id="reference-mode"></select></label><label>Critério<select id="validation-policy"><option value="tolerance">Dentro da tolerância</option><option value="bits">FP32 idêntico bit a bit</option></select></label><label>Tolerância absoluta<input id="atol" type="number" min="0" step="any" value="0.00001"></label><label>Tolerância relativa<input id="rtol" type="number" min="0" max="1" step="any" value="0.00001"></label><button id="apply-validation">Aplicar regra</button></div>
+      <p id="reference-description" class="reference-description"></p>
+      <div id="current-validation" class="panel"></div>
+      <div class="suite-config"><label>Casos aleatórios adicionais<input id="random-count" type="number" min="0" max="32" value="12"></label><label>Semente dos casos<input id="validation-seed" type="number" min="0" max="4294967295" value="2696"></label><p>Além dos aleatórios: entrada atual, zeros, extremos, cancelamento, sinais alternados, entrada unitária e frações.</p></div>
+      <div id="suite-results" class="panel"><p class="muted">Um único exemplo não demonstra correção. Rode o conjunto de casos para comparar outras entradas.</p></div>
+      <div id="quantization-results" class="panel" hidden></div>
+    </section>
+    <section id="clock-view" class="view page-view" hidden>
+      <div class="section-heading"><div><span class="eyebrow">MODELO DIDÁTICO · NÃO É MEDIÇÃO DO XEON</span><h1>Dependências em ciclos e nanossegundos.</h1><p>Explore como o custo dos lotes e o clock configurado afetam o caminho do seu circuito.</p></div></div>
+      <div class="clock-config panel"><label>Clock simulado · GHz<input id="clock-ghz" type="number" min="0.1" max="6" step="0.1" value="2.5"></label><label>Ciclos por lote de resultados<input id="clock-cost" type="number" min="1" max="1000" value="1"></label><button id="apply-clock">Recalcular modelo</button></div>
+      <div id="clock-summary" class="metric-grid"></div><p class="model-note">Neste modelo, cada lote de resultados custa o número de ciclos configurado. Um bloco aguarda seus pais; ramos independentes podem se sobrepor. Não há simulação das portas de execução, cache, leituras, loops ou latências reais de instruções. Tempo = ciclos ÷ clock em GHz, em nanossegundos.</p><div id="clock-timeline" class="panel"></div>
+    </section>
+    <section id="guide-view" class="view page-view guide" hidden><span class="eyebrow">APRENDER PELOS DADOS</span><h1>Explore sem perder os números.</h1><div class="guide-grid"><article class="panel"><h2>Navegação</h2><p>A roda do mouse aproxima ou afasta mantendo o ponto sob o cursor. Arraste o fundo, use o botão do meio, ou segure Espaço para navegar. “Enquadrar” mostra uma visão geral; “Focar seleção” aproxima o contexto escolhido.</p><p>Arraste blocos da paleta. Arraste de uma saída para uma entrada, ou clique nas duas portas. Enter e Espaço também acionam as portas. Ctrl+Z desfaz; Ctrl+Shift+Z refaz.</p></article><article class="panel"><h2>Todos os valores</h2><p>Os blocos mostram os vetores completos. Se quiser uma visão estrutural, desligue “Dados nos blocos”; os valores continuam acessíveis no inspetor. Clique em um elemento para ver decimal, bits, bytes e suas posições lógicas.</p><p>O desenho dos grupos mostra quantos números cabem em 128 ou 256 bits. É um agrupamento didático, não uma captura de registradores físicos.</p></article><article class="panel"><h2>Três comparações diferentes</h2><p><strong>Meu circuito</strong>: resultado das suas conexões. <strong>Gabarito</strong>: conta independente com a regra escolhida. <strong>C no Xeon</strong>: resultado do código compilado.</p><p>C e simulação concordarem mostra que o programa seguiu seu circuito. Só a comparação com o gabarito e outros casos avalia se o circuito resolve a conta pretendida.</p></article><article class="panel"><h2>Precisão e representação</h2><p>FP32 é ponto flutuante de 32 bits: sinal, expoente e fração. int8 é inteiro com sinal de 8 bits; uint8 é inteiro sem sinal. Dois códigos int4 cabem em um byte.</p><p>FMA, Fused Multiply-Add, funde multiplicação e soma com um único arredondamento. Quantização e mudanças na ordem das somas podem alterar o resultado. ULP, Unit in the Last Place, mede a distância entre FP32 adjacentes.</p></article></div><p class="model-note">Os exemplos estudam um grupo de 64 pesos. Não representam uma camada inteira do Colibri, o arranjo matricial R16, GPU, cache ou paralelismo. SIMD significa Single Instruction, Multiple Data; SSE significa Streaming SIMD Extensions; AVX significa Advanced Vector Extensions.</p></section>
+  </main>
+</body>
+</html>
