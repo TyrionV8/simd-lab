@@ -1,4 +1,4 @@
-import {$,escapeHtml as esc,labels,number,metric,descriptor,parseValues,vectorMarkup,highlightC,serialize,exactFloat} from './model.js';
+import {$,escapeHtml as esc,labels,number,metric,descriptor,parseValues,vectorMarkup,highlightC,serialize,exactFloat,floatText} from './model.js';
 import {CircuitCanvas} from './canvas.js';
 
 const STORE='simd-lab-circuit-v1';
@@ -114,7 +114,7 @@ function withNative(value,key) {
   if(!nativeResult?.values[key])return value;
   const values=nativeResult.values[key].map(v=>value.kind==='f32'?Math.fround(v):v);
   const bits=[],hex=[],decimal=[];
-  for(const v of values){const buffer=new ArrayBuffer(value.elementBytes),view=new DataView(buffer);if(value.kind==='f32')view.setFloat32(0,v,true);else if(value.elementBytes===4)view.setInt32(0,v,true);else if(value.elementBytes===2)view.setInt16(0,v,true);else view.setUint8(0,v&255);const bytes=[...new Uint8Array(buffer)];hex.push(bytes.map(b=>b.toString(16).padStart(2,'0')).join(' '));bits.push(bytes.toReversed().map(b=>b.toString(2).padStart(8,'0')).join(''));decimal.push(value.kind==='f32'?v.toPrecision(9):String(v));}
+  for(const v of values){const buffer=new ArrayBuffer(value.elementBytes),view=new DataView(buffer);if(value.kind==='f32')view.setFloat32(0,v,true);else if(value.elementBytes===4)view.setInt32(0,v,true);else if(value.elementBytes===2)view.setInt16(0,v,true);else view.setUint8(0,v&255);const bytes=[...new Uint8Array(buffer)];hex.push(bytes.map(b=>b.toString(16).padStart(2,'0')).join(' '));bits.push(bytes.toReversed().map(b=>b.toString(2).padStart(8,'0')).join(''));decimal.push(value.kind==='f32'?floatText(v):String(v));}
   return {...value,values,bits,hex,decimal};
 }
 

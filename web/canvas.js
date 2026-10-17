@@ -1,4 +1,5 @@
 import {escapeHtml,labels,descriptor,vectorMarkup,zoomAnchor} from './model.js';
+import {arrangeNodes} from './layout.js';
 
 const NS='http://www.w3.org/2000/svg';
 const element=(tag,attributes={})=>{const el=document.createElementNS(NS,tag);Object.entries(attributes).forEach(([k,v])=>el.setAttribute(k,v));return el;};
@@ -47,7 +48,7 @@ export class CircuitCanvas {
       const payload=data?.error?`<p class="node-error">${escapeHtml(data.error)}</p>`:value?vectorMarkup(value,{representation:this.representation,bits:this.registerBits,dense:true}):'<p class="muted">Conecte as entradas deste bloco.</p>';
       const implementation=data?.implementation;
       const functions=Object.keys(implementation?.functions||{});
-      return `<article class="node" data-node="${node.id}" style="left:${node.x}px;top:${node.y}px"><header class="node-header"><div><span class="node-id">${node.id}</span><span class="node-isa">${escapeHtml(hardware)}</span></div><h3>${escapeHtml(op.title)}</h3></header><div class="node-ports"><div>${input}</div><div>${output}</div></div><div class="node-payload">${payload}</div><footer class="node-function"><span>${escapeHtml(implementation?.instructions||op.instructions||'Operação C sobre os valores')}</span><button data-code-node="${node.id}" title="Ver função e código deste bloco">${escapeHtml(functions.length?functions.join(' + '):'Ver C do bloco')} ↗</button></footer></article>`;
+      return `<article class="node ${value?.count===1?'scalar':''}" data-node="${node.id}" style="left:${node.x}px;top:${node.y}px"><header class="node-header"><div><span class="node-id">${node.id}</span><span class="node-isa">${escapeHtml(hardware)}</span></div><h3>${escapeHtml(op.title)}</h3></header><div class="node-ports"><div>${input}</div><div>${output}</div></div><div class="node-payload">${payload}</div><footer class="node-function"><span>${escapeHtml(implementation?.instructions||op.instructions||'Operação C sobre os valores')}</span><button data-code-node="${node.id}" title="Ver função e código deste bloco">${escapeHtml(functions.length?functions.join(' + '):'Ver C do bloco')} ↗</button></footer></article>`;
     }).join('');
     this.nodesRoot.querySelectorAll('.node').forEach(el=>{
       el.addEventListener('click',event=>{
@@ -72,8 +73,8 @@ export class CircuitCanvas {
   }
 
   resize() {
-    let width=1200,height=800;
-    this.graph.nodes.forEach(node=>{const el=this.nodesRoot.querySelector(`.node[data-node="${node.id}"]`);width=Math.max(width,node.x+el.offsetWidth+180);height=Math.max(height,node.y+el.offsetHeight+180);});
+    let width=100,height=100;
+    this.graph.nodes.forEach(node=>{const el=this.nodesRoot.querySelector(`.node[data-node="${node.id}"]`);width=Math.max(width,node.x+el.offsetWidth+32);height=Math.max(height,node.y+el.offsetHeight+32);});
     this.width=width;this.height=height;this.world.style.width=width+'px';this.world.style.height=height+'px';this.applyTransform();
   }
 
@@ -127,10 +128,10 @@ export class CircuitCanvas {
       const path=element('path',{class:'wire'}),hit=element('path',{class:'wire-hit'}),label=element('g',{class:'wire-label',role:'button',tabindex:'0','aria-label':`Dados da conexão ${edge.from}.${edge.out} para ${edge.to}.${edge.input}`});
       const value=this.report?.nodes[edge.from]?.outputs[edge.out];
       const info=value?descriptor(value):null;
-      label.append(element('rect',{width:146,height:46,rx:6}));
-      const title=element('text',{x:9,y:16}),count=element('text',{x:9,y:34,class:'wire-description'});
+      label.append(element('rect',{width:134,height:40,rx:6}));
+      const title=element('text',{x:9,y:15}),count=element('text',{x:9,y:31,class:'wire-description'});
       title.textContent=info?`${info.count} × ${info.bits} bits`:'Conexão sem valor';
-      count.textContent=info?(info.packed?`${value.count} bytes · ${info.count} pesos`:`${info.name} · ver ${value.count} valores`):'Conecte as entradas';label.append(title,count);
+      count.textContent=info?(info.packed?`${value.count} bytes · ${info.count} pesos`:`${info.name} · ${value.count} valores`):'Conecte as entradas';label.append(title,count);
       const select=()=>this.callbacks.select({kind:'edge',index});hit.addEventListener('click',select);label.addEventListener('click',select);
       label.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
       this.svg.append(hit,path,label);this.edges.push({edge,path,hit,label});
@@ -148,7 +149,7 @@ export class CircuitCanvas {
   draw() {
     for(const {edge,path,hit,label} of this.edges) {
       const a=this.point(edge.from,edge.out,'out'),b=this.point(edge.to,edge.input,'in');if(!a||!b)continue;
-      const d=this.path(a,b);path.setAttribute('d',d);hit.setAttribute('d',d);label.setAttribute('transform',`translate(${(a.x+b.x)/2-73},${(a.y+b.y)/2-23})`);
+      const d=this.path(a,b);path.setAttribute('d',d);hit.setAttribute('d',d);label.setAttribute('transform',`translate(${(a.x+b.x)/2-67},${(a.y+b.y)/2-20})`);
     }
     const a=this.pending?this.point(this.pending.from,this.pending.out,'out'):null;
     this.draft?.setAttribute('d',a&&this.pointer?this.path(a,this.toWorld(this.pointer.x,this.pointer.y)):'');
@@ -173,18 +174,18 @@ export class CircuitCanvas {
 
   focus(id,{smooth=false}={}) {
     const node=this.graph.nodes.find(n=>n.id===id);if(!node)return;
-    this.viewport.scrollTo({left:Math.max(0,node.x*this.zoom-(this.viewport.clientWidth-390*this.zoom)/2),top:Math.max(0,node.y*this.zoom-35),behavior:smooth&&!matchMedia('(prefers-reduced-motion: reduce)').matches?'smooth':'instant'});
+    const width=this.nodesRoot.querySelector(`.node[data-node="${id}"]`).offsetWidth;
+    this.viewport.scrollTo({left:Math.max(0,node.x*this.zoom-(this.viewport.clientWidth-width*this.zoom)/2),top:Math.max(0,node.y*this.zoom-35),behavior:smooth&&!matchMedia('(prefers-reduced-motion: reduce)').matches?'smooth':'instant'});
   }
 
   fit() {this.setZoom(Math.min((this.viewport.clientWidth-30)/this.width,(this.viewport.clientHeight-30)/this.height));this.viewport.scrollTo(0,0);}
 
   arrange() {
-    const depths={},columns={};
-    const visiting=new Set();const depth=id=>{if(id in depths)return depths[id];if(visiting.has(id))return 0;visiting.add(id);const parents=this.graph.edges.filter(e=>e.to===id).map(e=>e.from);const result=parents.length?Math.max(...parents.map(p=>depth(p)+1)):0;visiting.delete(id);return depths[id]=result;};
-    this.graph.nodes.forEach(n=>(columns[depth(n.id)]??=[]).push(n));
-    for(const [d,nodes] of Object.entries(columns)) {
-      let y=32;
-      for(const node of nodes){node.x=40+Number(d)*560;node.y=y;const el=this.nodesRoot.querySelector(`.node[data-node="${node.id}"]`);y+=el.offsetHeight+52;el.style.left=node.x+'px';el.style.top=node.y+'px';}
+    const sizes=new Map([...this.nodesRoot.children].map(el=>[el.dataset.node,{width:el.offsetWidth,height:el.offsetHeight}]));
+    const positions=arrangeNodes(this.graph.nodes,this.graph.edges,sizes);
+    for(const node of this.graph.nodes) {
+      Object.assign(node,positions.get(node.id));const el=this.nodesRoot.querySelector(`.node[data-node="${node.id}"]`);
+      el.style.left=node.x+'px';el.style.top=node.y+'px';
     }
     this.resize();this.requestDraw();this.callbacks.moved(true);
   }

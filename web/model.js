@@ -73,18 +73,32 @@ export function valueText(value,index) {
   return value.decimal?.[index] ?? number(value.values[index]);
 }
 
+export function floatText(value) {
+  if(Object.is(value,-0))return '-0';
+  const [mantissa,exponent]=Math.fround(value).toPrecision(9).split('e');
+  return (mantissa.includes('.')?mantissa.replace(/0+$/,'').replace(/\.$/,''):mantissa)+(exponent===undefined?'':'e'+exponent);
+}
+
+export function vectorLayout(value,representation,bits,dense) {
+  const perGroup=Math.max(1,bits/(value.elementBytes*8));
+  const columns=Math.min(representation==='number'?8:4,perGroup,value.count);
+  const lengths=value.values.map((_,i)=>representation==='hex'?value.hex[i].length:valueText(value,i).length);
+  const cellWidth=Math.max(30,(String(value.count-1).length+2)*(dense?5.5:6.1)+8,Math.max(...lengths)*7.3+8,types[value.kind].packed?42:0);
+  return {perGroup,columns,indexChars:String(value.count-1).length+2,valueChars:Math.max(...lengths),width:Math.ceil(columns*cellWidth+(columns-1)*3+10)};
+}
+
 export function vectorMarkup(value,{representation="number",bits=128,dense=false,selectedIndex=-1,compareValues=null}={}) {
   if(!value)return '<p class="muted">Conecte as entradas para obter os valores.</p>';
   const info=descriptor(value,bits);
-  const perGroup=Math.max(1,bits/(value.elementBytes*8));
+  const {perGroup,columns,indexChars,valueChars,width}=vectorLayout(value,representation,bits,dense);
   const slots=info.lanes;
   const glyph=Array.from({length:slots},(_,i)=>`<span class="type-slot ${value.kind==='f32'?'floating':'integer'} ${i>=info.count?'unused':''}"><b>${i>=info.count?'livre':info.bits}</b><small>${i>=info.count?'':"bits"}</small></span>`).join("");
   let html=`<div class="vector-summary"><strong>${info.count} ${info.count===1?'número':'números'} de ${info.bits} bits</strong><span>${escapeHtml(info.family)}</span><div class="register-glyph">${glyph}</div><small>Capacidade do grupo: ${info.lanes} × ${info.bits} bits = ${bits} bits · ${info.groups} ${info.groups===1?'grupo':'grupos'} · ${info.bytes} bytes no total</small></div>`;
   if(representation==='bits'&&value.kind==='f32')html+='<div class="bit-legend"><span class="sign-bit">Sinal · 1 bit</span><span class="exponent-bits">Expoente · 8 bits</span><span class="fraction-bits">Fração · 23 bits</span></div>';
-  html+=`<div class="vector-values ${dense?'dense':''} ${representation}">`;
+  html+=`<div class="vector-values ${dense?'dense':''} ${representation}" style="--group-width:${width}px;--index-width:${indexChars}ch;--value-width:${valueChars}ch">`;
   for(let start=0;start<value.count;start+=perGroup) {
     const end=Math.min(value.count,start+perGroup);
-    html+=`<section class="register-group"><header><span>${bits} bits</span><span>posições ${start} a ${end-1}</span></header><div class="register-cells" style="--columns:${Math.min(4,perGroup)}">`;
+    html+=`<section class="register-group" aria-label="Grupo de ${bits} bits, posições ${start} a ${end-1}"><header><span>${bits} bits</span><span title="Posições ${start} a ${end-1}">[${start}–${end-1}]</span></header><div class="register-cells" style="--columns:${columns}">`;
     for(let i=start;i<end;i++) {
       let content=escapeHtml(valueText(value,i));
       if(representation==='bits') {
